@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bird Call Classification</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            animation: fadeInDown 1s;
+        }
+        p {
+            font-size: 1.2em;
+            margin: 20px 0;
+            animation: fadeInUp 1s;
+        }
+        .upload-button {
+            background: linear-gradient(to right, #1e90ff, #00bfff);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background 0.3s ease, transform 0.3s ease;
+            margin: 10px;
+            animation: fadeInUp 1s;
+        }
+        .upload-button:hover {
+            background: linear-gradient(to right, #00bfff, #1e90ff);
+            transform: scale(1.05);
+        }
+        .result {
+            font-size: 1.5em;
+            margin-top: 20px;
+            animation: fadeIn 1s;
+        }
+        .bird-description {
+            font-weight: bold;
+            font-size: 0.75em;
+            margin-top: 30px;
+            color: #1b1b1b;
+            font-style: italic;
+        }
+        img {
+            margin-top: 20px;
+            width: 400px;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            animation: fadeIn 1s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <h1>Find out what bird is singing nearby!</h1>
+    <p>Upload an audio file to discover.</p>
+    <form method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".mp3">
+        <input type="submit" value="Upload" class="upload-button">
+    </form>
+
+    <p>Or record live audio:</p>
+    <button id="recordButton" class="upload-button">Record</button>
+    <button id="stopButton" class="upload-button" disabled>Stop</button>
+    <div class="result">
+        <p id="result">{{ result|safe }}</p>
+        {% if image_url %}
+            <img id="birdImage" src="{{ image_url }}" alt="Bird Image">
+        {% endif %}
+        {% if bird_description %}
+            <p id="birdDescription" class="bird-description">{{ bird_description }}</p>
+        {% endif %}
+    </div>
+
+    <script>
+        let chunks = [];
+        let recorder;
+        let audioContext;
+        let gumStream;
+
+        const recordButton = document.getElementById('recordButton');
+        const stopButton = document.getElementById('stopButton');
+
+        recordButton.addEventListener('click', startRecording);
+        stopButton.addEventListener('click', stopRecording);
+
+        function startRecording() {
+            recordButton.disabled = true;
+            stopButton.disabled = false;
+
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                audioContext = new AudioContext();
+                gumStream = stream;
+                const input = audioContext.createMediaStreamSource(stream);
+                recorder = new MediaRecorder(stream);
+                recorder.ondataavailable = event => {
+                    chunks.push(event.data);
+                };
+                recorder.start();
+            }).catch(err => {
+                recordButton.disabled = false;
+                stopButton.disabled = true;
+            });
+        }
+
+        function stopRecording() {
+            stopButton.disabled = true;
+            recordButton.disabled = false;
+            recorder.stop();
+            gumStream.getAudioTracks()[0].stop();
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'audio/wav' });
+                chunks = [];
+                uploadAudio(blob);
+            };
+        }
+
+        function uploadAudio(blob) {
+            const formData = new FormData();
+            formData.append('audio_data', blob, 'recorded_audio.wav');
+            fetch('/record', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json())
+              .then(data => {
+                  document.getElementById('result').innerHTML = `There is <span class='probability'>${data.probability}</span> probability that the bird is <span class='bird-name'>${data.bird_name}</span>.`;
+                  document.getElementById('birdImage').src = data.image_url;
+                  document.getElementById('birdDescription').innerText = data.description;
+              }).catch(error => {
+                  console.error('Error:', error);
+              });
+        }
+    </script>
+</body>
+</html>
