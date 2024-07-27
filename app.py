@@ -39,3 +39,6 @@ def predict():
 
     return jsonify({'bird_name': predicted_species, 'probability': float(predictions[0][predicted_class][0])})
 
+@app.route("/")
+def hello_world():
+    return 'Hello'
